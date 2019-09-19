@@ -74,7 +74,7 @@ export class HereMaps {
     return link
   }
 
-  public DrawMapInto(element:HTMLElement, options:MapOptions =  { zoom: 10, center: { lat: 52.5, lng: 13.4} }):Map {
+  public DrawMapInto(element:HTMLElement, options:MapOptions =  { zoom: 10, center: { lat: 52.5, lng: 12.0} }):Map {
     var defaultLayers = this.platform.createDefaultLayers();
     return <Map>new H.Map(
       element,
