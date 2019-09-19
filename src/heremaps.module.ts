@@ -6,12 +6,26 @@ enum HereStatus {
   Ready
 }
 
+export interface ViewModel {
+  setLookAtData(options:MapOptions):void
+}
+
+export interface Map {
+  addObjects(objects:any[]):void
+  getViewModel():ViewModel
+}
+
+export interface MapOptions {
+  zoom?:number
+  center?:{lat:number, lng:number}
+}
+
 export class HereMaps {
 
   private static coreLink:string = "https://js.api.here.com/v3/3.1/mapsjs-core.js"
   private static serviceLink:string = "https://js.api.here.com/v3/3.1/mapsjs-service.js"
   private static status:HereStatus = HereStatus.Off;
-  private static callbacks:any[];
+  private static callbacks:(() => void)[] = [];
 
   private platform:any;
 
@@ -21,7 +35,11 @@ export class HereMaps {
     })
   }
 
-  public static OnReady() {
+  public static OnReady(callback:() => void) {
+    if (HereMaps.status == HereStatus.Ready) {
+      callback();
+    }
+    HereMaps.callbacks.push(callback)
     HereMaps.Init();
   }
 
@@ -43,7 +61,9 @@ export class HereMaps {
 
   private static TriggerReady() {
     HereMaps.status = HereStatus.Ready;
-
+    for (var callback = HereMaps.callbacks.pop(); callback; callback = HereMaps.callbacks.pop()) {
+      callback();
+    }
   }
 
   private static createScriptElement(src:string, type:string="text/javascript", charset:string="utf-8"):HTMLScriptElement {
@@ -54,17 +74,12 @@ export class HereMaps {
     return link
   }
 
-  public DrawMapInto(element:HTMLElement):void {
-
+  public DrawMapInto(element:HTMLElement, options:MapOptions =  { zoom: 10, center: { lat: 52.5, lng: 13.4} }):Map {
     var defaultLayers = this.platform.createDefaultLayers();
-
-    var map = new H.Map(
+    return <Map>new H.Map(
       element,
       defaultLayers.vector.normal.map,
-      {
-        zoom: 10,
-        center: { lat: 52.5, lng: 13.4 }
-      }
+      options
     )
   }
 }
