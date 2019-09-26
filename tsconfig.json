@@ -6,6 +6,14 @@
     "module": "es6",
     "target": "es5",
     "jsx": "react",
-    "allowJs": true
-  }
+    "allowJs": true,
+    "lib": [ "es2015", "dom", "es2016" ]
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modues",
+    "dist"
+  ]
 }

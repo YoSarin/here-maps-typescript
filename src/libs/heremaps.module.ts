@@ -1,3 +1,5 @@
+import { Source, SourceScript, SourceLink, SourceCollection } from "./external.module"
+
 declare var H:any
 
 enum HereStatus {
@@ -10,7 +12,7 @@ export interface ViewModel {
   setLookAtData(options:MapOptions):void
 }
 
-export interface Map {
+export interface MapInterface {
   addObjects(objects:any[]):void
   getViewModel():ViewModel
 }
@@ -46,13 +48,21 @@ export interface SearchParams {
   searchText:string
 }
 
+export interface HereMapsConfig {
+  apiKey:string
+}
+
 export class HereMaps {
 
-  private static coreLink:string = "https://js.api.here.com/v3/3.1/mapsjs-core.js"
-  private static serviceLink:string = "https://js.api.here.com/v3/3.1/mapsjs-service.js"
-  private static eventsLink:string = "https://js.api.here.com/v3/3.1/mapsjs-mapevents.js"
-  private static uiLink:string = "https://js.api.here.com/v3/3.1/mapsjs-ui.js"
-  private static uiCssLink:string = "https://js.api.here.com/v3/3.1/mapsjs-ui.css"
+  private static coreLink:Source = new SourceScript("https://js.api.here.com/v3/3.1/mapsjs-core.js")
+  private static serviceLink:Source = new SourceScript("https://js.api.here.com/v3/3.1/mapsjs-service.js").dependsOn(HereMaps.coreLink)
+  private static eventsLink:Source = new SourceScript("https://js.api.here.com/v3/3.1/mapsjs-mapevents.js").dependsOn(HereMaps.coreLink)
+  private static uiLink:Source = new SourceScript("https://js.api.here.com/v3/3.1/mapsjs-ui.js").dependsOn(HereMaps.coreLink)
+  private static uiCssLink:Source = new SourceLink("https://js.api.here.com/v3/3.1/mapsjs-ui.css").dependsOn(HereMaps.uiLink)
+
+  private static externalSources:SourceCollection = new SourceCollection(
+    HereMaps.coreLink, HereMaps.serviceLink, HereMaps.eventsLink, HereMaps.uiLink, HereMaps.uiCssLink
+  )
 
   private static status:HereStatus = HereStatus.Off;
   private static callbacks:(() => void)[] = [];
@@ -68,6 +78,7 @@ export class HereMaps {
   public static OnReady(callback:() => void) {
     if (HereMaps.status == HereStatus.Ready) {
       callback();
+      return
     }
     HereMaps.callbacks.push(callback)
     HereMaps.Init();
@@ -75,56 +86,24 @@ export class HereMaps {
 
   private static Init() {
     if (HereMaps.status == HereStatus.Off) {
+      console.log("HereMaps Init")
       HereMaps.status = HereStatus.Loading
       var head = <HTMLElement>document.getElementsByTagName("head")[0]
-      var core = HereMaps.createScriptElement(HereMaps.coreLink)
-      core.onload = function() {
-        var service = HereMaps.createScriptElement(HereMaps.serviceLink)
-        service.onload = function() {
-          var events = HereMaps.createScriptElement(HereMaps.eventsLink)
-          events.onload = function() {
-            var ui = HereMaps.createScriptElement(HereMaps.uiLink)
-            var uiCss = HereMaps.createLinkElement(HereMaps.uiCssLink)
-            ui.onload = function () {
-              HereMaps.TriggerReady()
-            }
-            head.appendChild(ui);
-            head.appendChild(uiCss)
-          }
-          head.appendChild(events)
-        }
-        head.appendChild(service)
-      }
-      head.appendChild(core);
+      HereMaps.externalSources.attach(head).then(() => HereMaps.TriggerReady())
     }
   }
 
   private static TriggerReady() {
+    console.log("HereMaps ready")
     HereMaps.status = HereStatus.Ready;
-    for (var callback = HereMaps.callbacks.pop(); callback; callback = HereMaps.callbacks.pop()) {
+    for (var callback = HereMaps.callbacks.shift(); callback; callback = HereMaps.callbacks.shift()) {
       callback();
     }
   }
 
-  private static createScriptElement(src:string, type:string="text/javascript", charset:string="utf-8"):HTMLScriptElement {
-    var link = <HTMLScriptElement>(document.createElement("script"))
-    link.setAttribute("src", src)
-    link.setAttribute("type", type)
-    link.setAttribute("charset", charset)
-    return link
-  }
-
-  private static createLinkElement(src:string, type:string="text/css", rel:string="stylesheet"):HTMLLinkElement {
-    var link = <HTMLLinkElement>(document.createElement("link"))
-    link.setAttribute("href", src)
-    link.setAttribute("type", type)
-    link.setAttribute("rel", rel)
-    return link
-  }
-
-  public CreateMap(element:HTMLElement, options:MapOptions =  { zoom: 10, center: { lat: 52.5, lng: 12.0} }):Map {
+  public CreateMap(element:HTMLElement, options:MapOptions =  { zoom: 10, center: { lat: 52.5, lng: 12.0} }):MapInterface {
     var defaultLayers = this.platform.createDefaultLayers();
-    var map = <Map>new H.Map(
+    var map = <MapInterface>new H.Map(
       element,
       defaultLayers.vector.normal.map,
       options
@@ -132,9 +111,9 @@ export class HereMaps {
 
     console.log(map)
 
-    var ui = H.ui.UI.createDefault(map, defaultLayers)
+    H.ui.UI.createDefault(map, defaultLayers)
     var events = new H.mapevents.MapEvents(map)
-    var behavior = new H.mapevents.Behavior(events)
+    new H.mapevents.Behavior(events)
 
     return map
   }
@@ -177,8 +156,8 @@ export class HereMaps {
     )
   }
 
-  private drawRouteToMap(result:any, map:Map):void {
-    var route, routeShape, startPoint, endPoint, linestring:any;
+  private drawRouteToMap(result:any, map:MapInterface):void {
+    var route, routeShape, linestring:any;
     if(result.response.route) {
       // Pick the first route from the response:
       route = result.response.route[0];
@@ -193,10 +172,6 @@ export class HereMaps {
         var parts = point.split(',');
         linestring.pushLatLngAlt(parts[0], parts[1]);
       });
-
-      // Retrieve the mapped positions of the requested waypoints:
-      startPoint = route.waypoint[0].mappedPosition;
-      endPoint = route.waypoint[1].mappedPosition;
 
       // Create a polyline to display the route:
       var routeLine = new H.map.Polyline(linestring, {
